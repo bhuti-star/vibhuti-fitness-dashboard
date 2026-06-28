@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Strength Training Dashboard</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a21; --card2:#1e222b; --line:#2a2f3a;
+    --text:#e8eaed; --muted:#9aa3b2; --accent:#4f9cff; --accent2:#36c08b;
+    --gold:#f2c14e; --danger:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:680px; margin:0 auto; padding:18px 16px 60px;}
+  header{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:18px;}
+  header h1{font-size:17px; margin:0; letter-spacing:.2px; line-height:1.25; max-width:62%;}
+  .hdr-right{text-align:right; flex-shrink:0;}
+  header .date{font-size:12px; color:var(--muted);}
+  .gstatus{font-size:12px; font-weight:700; color:var(--accent); margin-top:3px;}
+  .gstatus.today{color:var(--accent2);}
+  label{display:block; font-size:12px; color:var(--muted); margin:0 0 6px; text-transform:uppercase; letter-spacing:.6px;}
+  select,input{
+    width:100%; padding:13px 14px; font-size:16px; color:var(--text);
+    background:var(--card2); border:1px solid var(--line); border-radius:12px; outline:none;
+  }
+  select:focus,input:focus{border-color:var(--accent)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-top:16px;}
+  .card h2{margin:0 0 12px; font-size:13px; letter-spacing:.6px; text-transform:uppercase; color:var(--muted);}
+  .pb h2{color:var(--gold)}
+  table{width:100%; border-collapse:collapse; font-size:15px;}
+  th,td{text-align:left; padding:9px 8px; border-bottom:1px solid var(--line);}
+  th{font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:600;}
+  td:last-child,th:last-child{text-align:right}
+  tr:last-child td{border-bottom:none}
+  .sub{font-size:12px; color:var(--muted); margin:-4px 0 12px;}
+  .pbrow{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+  .pbrow .big{font-size:30px; font-weight:700; color:var(--gold)}
+  .pbrow .x{font-size:18px; color:var(--text)}
+  .pbrow .when{font-size:12px; color:var(--muted); margin-left:auto}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  .entry .row{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .entry .full{grid-column:1 / -1}
+  button{
+    width:100%; margin-top:14px; padding:15px; font-size:16px; font-weight:700;
+    color:#06231a; background:var(--accent2); border:none; border-radius:12px; cursor:pointer;
+  }
+  button:active{transform:translateY(1px)}
+  button:disabled{opacity:.5; cursor:default}
+  .addrow{display:flex; gap:8px; margin-top:8px;}
+  button.mini{width:auto; flex:1; margin-top:0; padding:11px 14px; font-size:14px;}
+  button.ghost{background:var(--card2); color:var(--text); border:1px solid var(--line);}
+  .toast{
+    position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(20px);
+    background:var(--accent2); color:#06231a; font-weight:700; padding:12px 20px; border-radius:30px;
+    opacity:0; pointer-events:none; transition:.25s; box-shadow:0 8px 24px rgba(0,0,0,.4); z-index:9;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .toast.err{background:var(--danger); color:#2a0606}
+  .muted{color:var(--muted)}
+  .today td:last-child, .today th:last-child{text-align:left}
+  .today td:nth-child(2), .today td:nth-child(3),
+  .today th:nth-child(2), .today th:nth-child(3){text-align:right}
+  .potable td.barcell{width:42%; padding-right:14px;}
+  .bar{height:14px; background:var(--card2); border:1px solid var(--line); border-radius:5px; overflow:hidden; min-width:50px;}
+  .bar > span{display:block; height:100%; background:var(--accent2); border-radius:5px 0 0 5px;}
+  .empty{color:var(--muted); font-size:14px; padding:6px 2px;}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (max-width:420px){
+    .pbrow .big{font-size:26px}
+    th,td{padding:8px 6px; font-size:14px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Vibhuti's Strength Training Dashboard</h1>
+    <div class="hdr-right">
+      <div class="date" id="today"></div>
+      <div class="gstatus" id="groupStatus"></div>
+    </div>
+  </header>
+
+  <!-- Exercise picker -->
+  <label for="exercise">Select exercise</label>
+  <select id="exercise">
+    <option value="" selected disabled>Choose an exercise…</option>
+  </select>
+
+  <!-- Inline "add new exercise" box (hidden until "Add new exercise…" is picked) -->
+  <div id="addExWrap" style="display:none; margin-top:10px;">
+    <input id="newExName" type="text" placeholder="New exercise name" autocomplete="off" />
+    <div class="addrow">
+      <button id="addExBtn" class="mini">Add to list</button>
+      <button id="addExCancel" class="mini ghost">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Last Session -->
+  <div class="card" id="lastCard" style="display:none">
+    <h2>Last Session</h2>
+    <div class="sub" id="lastSub"></div>
+    <table>
+      <thead><tr><th>#</th><th>Weight (KG)</th><th>Reps</th><th>KG × Reps</th></tr></thead>
+      <tbody id="lastBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Personal Best -->
+  <div class="card pb" id="pbCard" style="display:none">
+    <h2>All-Time Personal Best</h2>
+    <div class="pbrow">
+      <span class="big" id="pbWeight">—</span>
+      <span class="x" id="pbReps"></span>
+      <span class="when" id="pbDate"></span>
+    </div>
+  </div>
+
+  <!-- Progressive Overload -->
+  <div class="card po" id="poCard" style="display:none">
+    <h2>Progressive Overload</h2>
+    <div class="sub">Heaviest set in each of the last 5 sessions</div>
+    <table class="potable">
+      <thead><tr><th>Date</th><th>Progress</th><th>KG</th><th>Reps</th><th>KG × Reps</th></tr></thead>
+      <tbody id="poBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Data entry -->
+  <div class="card entry" id="entryCard" style="display:none">
+    <h2>Log a Set</h2>
+    <div class="row">
+      <div>
+        <label for="weight">Weight (KG)</label>
+        <input id="weight" type="number" inputmode="decimal" step="0.5" placeholder="e.g. 32.5" />
+      </div>
+      <div>
+        <label for="reps">Reps</label>
+        <input id="reps" type="number" inputmode="numeric" step="1" placeholder="e.g. 6" />
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div>
+        <label for="group">Group (optional)</label>
+        <select id="group">
+          <option value="">— none —</option>
+          <option>Group A</option>
+          <option>Group B</option>
+        </select>
+      </div>
+      <div>
+        <label for="intensity">Intensity (optional)</label>
+        <select id="intensity">
+          <option value="">— none —</option>
+          <option>Working</option>
+          <option>Prep</option>
+          <option>Rest Set</option>
+          <option>Cheat Set</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="full">
+        <label for="notes">Notes (optional)</label>
+        <input id="notes" type="text" autocomplete="off" placeholder="e.g. Smith Machine" />
+      </div>
+    </div>
+    <button id="saveBtn">Save set</button>
+  </div>
+
+  <!-- Today's Workout -->
+  <div class="card today" id="todayCard" style="display:none">
+    <h2>Today's Workout</h2>
+    <table>
+      <thead><tr><th>Exercise</th><th>KG</th><th>Reps</th><th>Intensity / Notes</th></tr></thead>
+      <tbody id="todayBody"></tbody>
+    </table>
+  </div>
+
+  <p class="empty" id="placeholder">Pick an exercise to see your last session and personal best.</p>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ======================================================================
+   CONFIG — paste your Apps Script Web App URL between the quotes below.
+   It looks like: https://script.google.com/macros/s/AKfy..../exec
+   ====================================================================== */
+const API_URL = "https://script.google.com/macros/s/AKfycbw6ZO2oMwek7LqWeAuKpT22iQZedUVEj7nXWYkTfnu5crO8AdCSaGY43IM9vWIN9H9C/exec";
+
+/* The exercise dropdown list. Add or remove names here any time. */
+const EXERCISES = [
+  "Assisted Pull-Ups","Back Squats","Barbell Bent-Over Row","Barbell Flat Bench Press",
+  "Barbell Incline Press","Barbell Push Press","Barbell Shrugs","Barbell Strict Press",
+  "Cable High Row (Standing)","Cable Shrugs","Calf Raises","Deadlift","Dumbbell Bent-Over Row",
+  "Dumbbell Biceps Curl","Dumbbell Flat Bench Press","Dumbbell Incline Press","Dumbbell Lateral Raise",
+  "Dumbbell Pronated High Row","Dumbbell Push Press","Dumbbell Shrugs","Dumbell Strict Press",
+  "Front Squats","Hamstring Curl","Lat Pulldown","Lunges","Overhead Squats","Pulley Pushdown",
+  "Push-Ups","Seated Row"
+];
+
+/* ---- elements ---- */
+const $ = id => document.getElementById(id);
+const exSel = $("exercise"), lastCard = $("lastCard"), pbCard = $("pbCard"),
+      poCard = $("poCard"), poBody = $("poBody"),
+      todayCard = $("todayCard"), todayBody = $("todayBody"),
+      entryCard = $("entryCard"), placeholder = $("placeholder"),
+      lastBody = $("lastBody"), lastSub = $("lastSub"),
+      pbWeight = $("pbWeight"), pbReps = $("pbReps"), pbDate = $("pbDate"),
+      groupStatusEl = $("groupStatus"),
+      saveBtn = $("saveBtn"), toast = $("toast");
+
+/* ---- init ---- */
+$("today").textContent = new Date().toLocaleDateString("en-GB",
+  { day:"2-digit", month:"short", year:"numeric" });
+populateExercises(EXERCISES);   // show a list immediately; backend refreshes it below
+
+exSel.addEventListener("change", onExerciseChange);
+saveBtn.addEventListener("click", saveSet);
+$("addExBtn").addEventListener("click", addExercise);
+$("addExCancel").addEventListener("click", hideAddBox);
+$("newExName").addEventListener("keydown", e => { if(e.key === "Enter") addExercise(); });
+
+loadInit();   // pull the live exercise list + group banner from the backend
+
+/* ---- build the dropdown from a list of names ---- */
+function populateExercises(list, selectVal){
+  exSel.innerHTML = "";
+  const ph = document.createElement("option");
+  ph.value = ""; ph.textContent = "Choose an exercise…"; ph.disabled = true;
+  if(!selectVal) ph.selected = true;
+  exSel.appendChild(ph);
+  list.forEach(name => {
+    const o = document.createElement("option"); o.value = name; o.textContent = name;
+    if(name === selectVal) o.selected = true;
+    exSel.appendChild(o);
+  });
+  const add = document.createElement("option");
+  add.value = "__add__"; add.textContent = "➕  Add new exercise…";
+  exSel.appendChild(add);
+}
+
+function onExerciseChange(){
+  if(exSel.value === "__add__"){ showAddBox(); return; }
+  hideAddBox();
+  loadExercise(exSel.value);
+}
+function showAddBox(){ $("addExWrap").style.display = "block"; exSel.value = ""; $("newExName").value = ""; $("newExName").focus(); }
+function hideAddBox(){ $("addExWrap").style.display = "none"; }
+
+/* ---- add a new exercise to the backend list ---- */
+async function addExercise(){
+  const name = $("newExName").value.trim();
+  if(!name){ showToast("Type a name first", true); return; }
+  const btn = $("addExBtn"); btn.disabled = true; btn.textContent = "Adding…";
+  try{
+    const r = await fetch(API_URL, { method:"POST", body: JSON.stringify({ action:"addExercise", exercise:name }) });
+    const textBody = await r.text();          // read raw first so we can see non-JSON replies
+    let j;
+    try { j = JSON.parse(textBody); }
+    catch(e){ throw new Error("Server sent non-JSON: " + textBody.slice(0, 90)); }
+    if(!j.ok) throw new Error(j.error || "Server returned ok:false");
+    populateExercises(j.exercises, name);   // rebuild list with the new name selected
+    hideAddBox();
+    showToast("Added ✓");
+    loadExercise(name);                     // show its (empty) cards, ready to log
+  }catch(err){
+    showToast("Add failed: " + err.message, true);
+    console.error("Add exercise error:", err);
+  }finally{
+    btn.disabled = false; btn.textContent = "Add to list";
+  }
+}
+
+/* ---- pull live exercise list + group banner on page load ---- */
+async function loadInit(){
+  try{
+    const r = await fetch(API_URL);
+    const j = await r.json();
+    if(j.ok){
+      if(j.exercises && j.exercises.length) populateExercises(j.exercises);
+      if(j.groupStatus) renderStatus(j.groupStatus);
+      renderToday(j.todayWorkout);
+    }
+  }catch(err){ /* offline: keep fallback list, blank banner */ }
+}
+function renderStatus(s){
+  if(s && s.today){
+    groupStatusEl.textContent = "Today: " + s.today;
+    groupStatusEl.className = "gstatus today";
+  } else if(s && s.last){
+    const upcoming = s.last === "Group A" ? "Group B" : "Group A";  // sessions alternate
+    groupStatusEl.textContent = "Upcoming: " + upcoming;
+    groupStatusEl.className = "gstatus";
+  } else {
+    groupStatusEl.textContent = "";
+  }
+}
+
+/* ---- show toast ---- */
+let toastTimer;
+function showToast(msg, isErr){
+  toast.textContent = msg;
+  toast.className = "toast show" + (isErr ? " err" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>toast.className = "toast", isErr ? 7000 : 2200);
+}
+
+/* ---- load summary for an exercise ---- */
+async function loadExercise(name){
+  if(!name) return;
+  placeholder.style.display = "none";
+  lastCard.style.display = pbCard.style.display = entryCard.style.display = "block";
+  lastSub.innerHTML = '<span class="spinner"></span>Loading…';
+  lastBody.innerHTML = ""; pbWeight.textContent = "…"; pbReps.textContent = ""; pbDate.textContent = "";
+  try{
+    const r = await fetch(API_URL + "?exercise=" + encodeURIComponent(name));
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || "Server error");
+    render(j.lastSession, j.personalBest, j.progressiveOverload);
+    if(j.groupStatus) renderStatus(j.groupStatus);
+    renderToday(j.todayWorkout);
+  }catch(err){
+    lastSub.textContent = "Couldn't load data.";
+    showToast("Couldn't reach the server", true);
+  }
+}
+
+function render(last, pb, po){
+  // Last session
+  if(last && last.sets && last.sets.length){
+    lastSub.textContent = "Last session: " + last.date + (last.group ? "  ·  " + last.group : "");
+    lastBody.innerHTML = last.sets.map((s,i) => {
+      const vol = (typeof s.weight==="number" && typeof s.reps==="number") ? (s.weight*s.reps) : "—";
+      return `<tr><td>${i+1}</td><td>${s.weight}</td><td>${s.reps}</td><td>${vol}</td></tr>`;
+    }).join("");
+  } else {
+    lastSub.textContent = "No sessions logged yet.";
+    lastBody.innerHTML = `<tr><td colspan="4" class="muted">—</td></tr>`;
+  }
+  // Personal best
+  if(pb && pb.weight !== undefined && pb.weight !== ""){
+    pbWeight.textContent = pb.weight + " KG";
+    pbReps.textContent = pb.reps !== "" ? "× " + pb.reps + " reps" : "";
+    pbDate.textContent = pb.date || "";
+  } else {
+    pbWeight.textContent = "—"; pbReps.textContent = ""; pbDate.textContent = "";
+  }
+  // Progressive overload
+  renderPO(po);
+}
+
+function esc(s){
+  return String(s == null ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function renderToday(list){
+  if(!list || !list.length){ todayCard.style.display = "none"; return; }
+  todayCard.style.display = "block";
+  todayBody.innerHTML = list.map(r => {
+    const note = [r.intensity, r.notes].filter(Boolean).join("; ");
+    return `<tr><td>${esc(r.exercise)}</td><td>${r.weight}</td><td>${r.reps}</td><td>${esc(note) || "—"}</td></tr>`;
+  }).join("");
+}
+
+function renderPO(po){
+  if(!po || !po.length){ poCard.style.display = "none"; return; }
+  poCard.style.display = "block";
+  const vols = po.map(p => typeof p.volume === "number" ? p.volume : 0);
+  const maxVol = Math.max.apply(null, vols) || 1;
+  poBody.innerHTML = po.map(p => {
+    const vol = (typeof p.volume === "number") ? p.volume : "—";
+    const pct = (typeof p.volume === "number") ? Math.round(p.volume / maxVol * 100) : 0;
+    return `<tr><td>${p.date}</td>`+
+           `<td class="barcell"><div class="bar"><span style="width:${pct}%"></span></div></td>`+
+           `<td>${p.weight}</td><td>${p.reps}</td><td>${vol}</td></tr>`;
+  }).join("");
+}
+
+/* ---- save a new set ---- */
+async function saveSet(){
+  const exercise = exSel.value;
+  const weight = parseFloat($("weight").value);
+  const reps = parseInt($("reps").value, 10);
+  const group = $("group").value;
+  const intensity = $("intensity").value;
+  const notes = $("notes").value.trim();
+
+  if(!exercise){ showToast("Pick an exercise first", true); return; }
+  if(isNaN(weight)){ showToast("Enter a weight", true); return; }
+  if(isNaN(reps)){ showToast("Enter reps", true); return; }
+
+  // ---- optimistic update: reflect the set instantly, before the server replies ----
+  appendTodayRow({ exercise, weight, reps, intensity, notes });
+  showToast("Saved ✓");
+  $("weight").value = ""; $("reps").value = ""; $("notes").value = "";
+  saveBtn.disabled = true; saveBtn.textContent = "Saving…";
+
+  try{
+    // No custom Content-Type header -> avoids a CORS preflight to Apps Script.
+    const r = await fetch(API_URL, {
+      method:"POST",
+      body: JSON.stringify({ exercise, weight, reps, group, intensity, notes })
+    });
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || "Server error");
+    // reconcile with the authoritative numbers from the server
+    render(j.lastSession, j.personalBest, j.progressiveOverload);
+    if(j.groupStatus) renderStatus(j.groupStatus);
+    renderToday(j.todayWorkout);
+  }catch(err){
+    showToast("Save failed — not recorded. Please try again", true);
+    loadExercise(exercise);   // re-sync from the server (removes the optimistic row)
+  }finally{
+    saveBtn.disabled = false; saveBtn.textContent = "Save set";
+  }
+}
+
+/* Add a row to Today's Workout immediately (before the server confirms). */
+function appendTodayRow(r){
+  todayCard.style.display = "block";
+  const note = [r.intensity, r.notes].filter(Boolean).join("; ");
+  todayBody.insertAdjacentHTML("beforeend",
+    `<tr><td>${esc(r.exercise)}</td><td>${r.weight}</td><td>${r.reps}</td><td>${esc(note) || "—"}</td></tr>`);
+}
+</script>
+</body>
+</html>
