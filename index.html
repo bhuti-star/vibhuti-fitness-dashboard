@@ -65,9 +65,7 @@
   .today td:last-child, .today th:last-child{text-align:left}
   .today td:nth-child(2), .today td:nth-child(3),
   .today th:nth-child(2), .today th:nth-child(3){text-align:right}
-  .potable td.barcell{width:42%; padding-right:14px;}
-  .bar{height:14px; background:var(--card2); border:1px solid var(--line); border-radius:5px; overflow:hidden; min-width:50px;}
-  .bar > span{display:block; height:100%; background:var(--accent2); border-radius:5px 0 0 5px;}
+  .sessionblock + .sessionblock{margin-top:14px; padding-top:12px; border-top:1px solid var(--line);}
   .empty{color:var(--muted); font-size:14px; padding:6px 2px;}
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
   @keyframes spin{to{transform:rotate(360deg)}}
@@ -103,14 +101,10 @@
     </div>
   </div>
 
-  <!-- Last Session -->
+  <!-- Last 2 Sessions -->
   <div class="card" id="lastCard" style="display:none">
-    <h2>Last Session</h2>
-    <div class="sub" id="lastSub"></div>
-    <table>
-      <thead><tr><th>#</th><th>Weight (KG)</th><th>Reps</th><th>KG × Reps</th></tr></thead>
-      <tbody id="lastBody"></tbody>
-    </table>
+    <h2>Last 2 Sessions</h2>
+    <div id="lastSessions"></div>
   </div>
 
   <!-- Personal Best -->
@@ -121,16 +115,6 @@
       <span class="x" id="pbReps"></span>
       <span class="when" id="pbDate"></span>
     </div>
-  </div>
-
-  <!-- Progressive Overload -->
-  <div class="card po" id="poCard" style="display:none">
-    <h2>Progressive Overload</h2>
-    <div class="sub">Heaviest set in each of the last 5 sessions</div>
-    <table class="potable">
-      <thead><tr><th>Date</th><th>Progress</th><th>KG</th><th>Reps</th><th>KG × Reps</th></tr></thead>
-      <tbody id="poBody"></tbody>
-    </table>
   </div>
 
   <!-- Data entry -->
@@ -211,10 +195,9 @@ const EXERCISES = [
 /* ---- elements ---- */
 const $ = id => document.getElementById(id);
 const exSel = $("exercise"), lastCard = $("lastCard"), pbCard = $("pbCard"),
-      poCard = $("poCard"), poBody = $("poBody"),
       todayCard = $("todayCard"), todayBody = $("todayBody"),
       entryCard = $("entryCard"), placeholder = $("placeholder"),
-      lastBody = $("lastBody"), lastSub = $("lastSub"),
+      lastSessionsEl = $("lastSessions"),
       pbWeight = $("pbWeight"), pbReps = $("pbReps"), pbDate = $("pbDate"),
       groupStatusEl = $("groupStatus"),
       saveBtn = $("saveBtn"), toast = $("toast");
@@ -294,13 +277,11 @@ async function loadInit(){
   }catch(err){ /* offline: keep fallback list, blank banner */ }
 }
 function renderStatus(s){
-  if(s && s.today){
-    groupStatusEl.textContent = "Today: " + s.today;
+  // Recommend the opposite of the most recent PAST-day group.
+  if(s && s.last){
+    const todayGroup = s.last === "Group A" ? "Group B" : "Group A";
+    groupStatusEl.textContent = "Today: " + todayGroup;
     groupStatusEl.className = "gstatus today";
-  } else if(s && s.last){
-    const upcoming = s.last === "Group A" ? "Group B" : "Group A";  // sessions alternate
-    groupStatusEl.textContent = "Upcoming: " + upcoming;
-    groupStatusEl.className = "gstatus";
   } else {
     groupStatusEl.textContent = "";
   }
@@ -320,33 +301,23 @@ async function loadExercise(name){
   if(!name) return;
   placeholder.style.display = "none";
   lastCard.style.display = pbCard.style.display = entryCard.style.display = "block";
-  lastSub.innerHTML = '<span class="spinner"></span>Loading…';
-  lastBody.innerHTML = ""; pbWeight.textContent = "…"; pbReps.textContent = ""; pbDate.textContent = "";
+  lastSessionsEl.innerHTML = '<div class="sub"><span class="spinner"></span>Loading…</div>';
+  pbWeight.textContent = "…"; pbReps.textContent = ""; pbDate.textContent = "";
   try{
     const r = await fetch(API_URL + "?exercise=" + encodeURIComponent(name));
     const j = await r.json();
     if(!j.ok) throw new Error(j.error || "Server error");
-    render(j.lastSession, j.personalBest, j.progressiveOverload);
+    render(j.lastSessions, j.personalBest);
     if(j.groupStatus) renderStatus(j.groupStatus);
     renderToday(j.todayWorkout);
   }catch(err){
-    lastSub.textContent = "Couldn't load data.";
+    lastSessionsEl.innerHTML = '<div class="sub">Couldn\'t load data.</div>';
     showToast("Couldn't reach the server", true);
   }
 }
 
-function render(last, pb, po){
-  // Last session
-  if(last && last.sets && last.sets.length){
-    lastSub.textContent = "Last session: " + last.date + (last.group ? "  ·  " + last.group : "");
-    lastBody.innerHTML = last.sets.map((s,i) => {
-      const vol = (typeof s.weight==="number" && typeof s.reps==="number") ? (s.weight*s.reps) : "—";
-      return `<tr><td>${i+1}</td><td>${s.weight}</td><td>${s.reps}</td><td>${vol}</td></tr>`;
-    }).join("");
-  } else {
-    lastSub.textContent = "No sessions logged yet.";
-    lastBody.innerHTML = `<tr><td colspan="4" class="muted">—</td></tr>`;
-  }
+function render(sessions, pb){
+  renderSessions(sessions);
   // Personal best
   if(pb && pb.weight !== undefined && pb.weight !== ""){
     pbWeight.textContent = pb.weight + " KG";
@@ -355,8 +326,26 @@ function render(last, pb, po){
   } else {
     pbWeight.textContent = "—"; pbReps.textContent = ""; pbDate.textContent = "";
   }
-  // Progressive overload
-  renderPO(po);
+}
+
+function renderSessions(sessions){
+  if(!sessions || !sessions.length){
+    lastSessionsEl.innerHTML = '<div class="sub">No sessions logged yet.</div>';
+    return;
+  }
+  lastSessionsEl.innerHTML = sessions.map(s => {
+    const rows = s.sets.map((set,i) => {
+      const vol = (typeof set.weight==="number" && typeof set.reps==="number") ? (set.weight*set.reps) : "—";
+      return `<tr><td>${i+1}</td><td>${set.weight}</td><td>${set.reps}</td><td>${vol}</td></tr>`;
+    }).join("");
+    return `<div class="sessionblock">
+      <div class="sub">${esc(s.date)}${s.group ? "  ·  " + esc(s.group) : ""}</div>
+      <table>
+        <thead><tr><th>#</th><th>Weight (KG)</th><th>Reps</th><th>KG × Reps</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join("");
 }
 
 function esc(s){
@@ -370,20 +359,6 @@ function renderToday(list){
   todayBody.innerHTML = list.map(r => {
     const note = [r.intensity, r.notes].filter(Boolean).join("; ");
     return `<tr><td>${esc(r.exercise)}</td><td>${r.weight}</td><td>${r.reps}</td><td>${esc(note) || "—"}</td></tr>`;
-  }).join("");
-}
-
-function renderPO(po){
-  if(!po || !po.length){ poCard.style.display = "none"; return; }
-  poCard.style.display = "block";
-  const vols = po.map(p => typeof p.volume === "number" ? p.volume : 0);
-  const maxVol = Math.max.apply(null, vols) || 1;
-  poBody.innerHTML = po.map(p => {
-    const vol = (typeof p.volume === "number") ? p.volume : "—";
-    const pct = (typeof p.volume === "number") ? Math.round(p.volume / maxVol * 100) : 0;
-    return `<tr><td>${p.date}</td>`+
-           `<td class="barcell"><div class="bar"><span style="width:${pct}%"></span></div></td>`+
-           `<td>${p.weight}</td><td>${p.reps}</td><td>${vol}</td></tr>`;
   }).join("");
 }
 
@@ -415,7 +390,7 @@ async function saveSet(){
     const j = await r.json();
     if(!j.ok) throw new Error(j.error || "Server error");
     // reconcile with the authoritative numbers from the server
-    render(j.lastSession, j.personalBest, j.progressiveOverload);
+    render(j.lastSessions, j.personalBest);
     if(j.groupStatus) renderStatus(j.groupStatus);
     renderToday(j.todayWorkout);
   }catch(err){
